@@ -10,6 +10,7 @@ const CHECK = {
   invoice: () => [require('./saleModels').Sale, 'invoiceNo'],
   purchase: () => [require('./purchaseModels').Purchase, 'purchaseNo'],
   order: () => [require('./orderModels').Order, 'orderNo'],
+  return: () => [require('./saleModels').SaleReturn, 'returnNo'],
 };
 const nextId = async (key, prefix) => {
   for (let i = 0; i < 2000; i++) {
@@ -27,12 +28,17 @@ const Client = models.Client || model('Client', new Schema({
   phone: { type: String, required: true, trim: true },
   address: { type: String, trim: true },
   note: { type: String, trim: true },
+  openingDue: { type: Number, default: 0, min: 0 }, // money the client already owed before this system started
+  openingDate: { type: Date },
 }, { timestamps: true }));
 
 const productSchema = new Schema({
   name: { type: String, required: true, trim: true },
   brand: { type: String, trim: true, default: '' }, thickness: { type: String, trim: true, default: '' },
   color: { type: String, trim: true, default: '' }, size: { type: String, trim: true, default: '' },
+  grade: { type: String, trim: true, default: '' }, // optional info (A, B, C...): fills the Grade column when selling
+  lth: { type: Number, min: 0 }, wth: { type: Number, min: 0 }, // optional default length and width
+  pcs: { type: Number, default: 0 }, // PCS in stock: its own counter, never used in quantity, cost or profit calculations
   unit: { type: String, default: 'sq ft', trim: true },
   price: { type: Number, default: 0, min: 0 },
   stock: { type: Number, default: 0 },

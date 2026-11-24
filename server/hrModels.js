@@ -8,6 +8,7 @@ const Employee = models.Employee || model('Employee', new Schema({
   phones: [String],
   salary: { type: Number, default: 0, min: 0 },
   joinDate: Date,
+  deviceId: { type: String, trim: true }, // the number the attendance machine knows this person by (empty = digits of the employee ID)
   active: { type: Boolean, default: true },
 }, { timestamps: true }));
 

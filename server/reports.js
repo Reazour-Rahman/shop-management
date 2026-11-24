@@ -1,9 +1,10 @@
 const router = require('express').Router();
 const mongoose = require('mongoose');
 const { Product } = require('./models');
-const { Sale, Payment, StockMove } = require('./saleModels');
+const { Sale, Payment, StockMove, SaleReturn } = require('./saleModels');
 const { Purchase, SupplierPayment } = require('./purchaseModels');
 const { SalaryRecord, SalaryPayment, Expense } = require('./hrModels');
+const { clientOpening, supplierOpening, sumLeft } = require('./opening');
 
 const wrap = fn => (req, res) => fn(req, res).catch(e => res.status(400).json({ error: e.message }));
 const r2 = n => Math.round(n * 100) / 100;
@@ -31,15 +32,17 @@ async function statement(from, to) {
   const m = dateMatch(from, to);
   // Salary is an accrual: counted in the month it belongs to, whenever it is paid
   const pm = (from || to) ? { from: { ...(from && { $gte: new Date(from) }), ...(to && { $lte: new Date(to + 'T23:59:59.999Z') }) } } : {};
-  const [revenue, purchases, salary, cats, cashIn, paidSup, salPaid, beginInv, endInv] = await Promise.all([
-    agg(Sale, m, '$total'), agg(Purchase, m, '$total'), agg(SalaryRecord, pm, '$amount'),
+  const wm = (from || to) ? { waivedAt: { ...(from && { $gte: new Date(from) }), ...(to && { $lte: new Date(to + 'T23:59:59.999Z') }) } } : { waivedAt: { $exists: true } };
+  const [soldTotal, returnedTotal, waived, purchases, salary, cats, cashIn, paidSup, salPaid, beginInv, endInv] = await Promise.all([
+    agg(Sale, m, '$total'), agg(SaleReturn, m, '$total'), agg(Sale, wm, '$waived'), agg(Purchase, m, '$total'), agg(SalaryRecord, pm, '$amount'),
     Expense.aggregate([{ $match: m }, { $group: { _id: '$category', total: { $sum: '$amount' } } }, { $sort: { total: -1 } }]),
     agg(Payment, m, '$amount'), agg(SupplierPayment, m, '$amount'), agg(SalaryPayment, m, '$amount'),
     inventoryValue(from ? new Date(new Date(from) - 1) : new Date(0)), inventoryValue(to ? new Date(to + 'T23:59:59.999Z') : undefined),
   ]);
-  const cogs = r2(beginInv + purchases - endInv), gross = r2(revenue - cogs);
+  const revenue = r2(soldTotal - returnedTotal); // net sales: invoices less goods returned in the period
+  const cogs = r2(beginInv + purchases - endInv), gross = r2(revenue - waived - cogs); // Moukuf (dues given up) lowers the profit in the period it was waived
   const other = r2(cats.reduce((t, c) => t + c.total, 0)), opex = r2(salary + other);
-  return { revenue, beginInv, purchases, endInv, cogs, gross, salary, other, opex,
+  return { revenue, waived, beginInv, purchases, endInv, cogs, gross, salary, other, opex,
     categories: cats.map(c => ({ category: c._id, total: r2(c.total) })), cost: r2(cogs + opex), net: r2(gross - opex),
     cash: { in: cashIn, suppliers: paidSup, salary: salPaid, other, net: r2(cashIn - paidSup - salPaid - other) } };
 }
@@ -51,13 +54,18 @@ router.get('/dashboard', wrap(async (req, res) => {
   const day = new Date(t), end = new Date(t + 'T23:59:59.999Z'), mStart = new Date(t.slice(0, 7) + '-01');
   const month = { date: { $gte: mStart, $lte: end } };
   const start30 = new Date(day.getTime() - 29 * 864e5);
-  const [todaySales, monthSales, monthPaid, monthDue, clientDue, payable, salaryDue, monthExpense, life, low, daily] = await Promise.all([
+  const [todaySalesGross, monthSalesGross, monthPaid, monthDue, todayReturns, monthReturns, saleDue, purDue, salaryDue, monthExpense, life, low, daily, cOpen, sOpen] = await Promise.all([
     agg(Sale, { date: { $gte: day, $lte: end } }, '$total'), agg(Sale, month, '$total'), agg(Sale, month, '$paid'), agg(Sale, month, '$due'),
+    agg(SaleReturn, { date: { $gte: day, $lte: end } }, '$total'), agg(SaleReturn, month, '$total'),
     agg(Sale, { due: { $gt: 0 } }, '$due'), agg(Purchase, { due: { $gt: 0 } }, '$due'), agg(SalaryRecord, { due: { $gt: 0 } }, '$due'),
     agg(Expense, month, '$amount'), statement(),
     Product.find({ isService: false, $expr: { $lte: ['$stock', '$lowStock'] } }).select('name brand color size thickness stock unit').sort('name'),
     Sale.aggregate([{ $match: { date: { $gte: start30, $lte: end } } }, { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } }, total: { $sum: '$total' } } }]),
+    clientOpening(), supplierOpening(),
   ]);
+  const todaySales = r2(todaySalesGross - todayReturns), monthSales = r2(monthSalesGross - monthReturns); // net of goods returned
+  // Total receivable / payable = unpaid invoices + opening amounts still unpaid. The month figures above stay invoice-only.
+  const clientDue = r2(saleDue + sumLeft(cOpen)), payable = r2(purDue + sumLeft(sOpen));
   const by = Object.fromEntries(daily.map(d => [d._id, d.total]));
   const series = Array.from({ length: 30 }, (_, i) => { const k = new Date(start30.getTime() + i * 864e5).toISOString().slice(0, 10); return { date: k, total: r2(by[k] || 0) }; });
   res.json({ todaySales, monthSales, monthPaid, monthDue, clientDue, payable, salaryDue, monthExpense, lifetimeNet: life.net, low, series });

@@ -4,7 +4,7 @@ import { api } from './api';
 import { PayModal, MethodSelect, money, fdate, today, COLOR } from './Sales.jsx';
 
 const age = d => Math.floor((Date.now() - new Date(d)) / 864e5);
-const blank = { product: '', qty: '', cost: '' };
+const blank = { product: '', qty: '', pcs: '', cost: '' };
 
 function NewPurchase({ suppliers, products, onHide, onSaved }) {
   const [f, setF] = useState({ mode: 'old', supplier: '', ns: { name: '', phone: '' }, date: today(), paid: '', method: 'Cash', note: '' });
@@ -38,13 +38,14 @@ function NewPurchase({ suppliers, products, onHide, onSaved }) {
           <Col md={3}><Form.Control type="date" required value={f.date} onChange={e => setF({ ...f, date: e.target.value })} /></Col>
         </Row>
         <Table size="sm" className="align-middle">
-          <thead><tr><th style={{ width: '38%' }}>Product</th><th>Quantity</th><th>Unit cost (৳)</th><th className="text-end">Total</th><th /></tr></thead>
+          <thead><tr><th style={{ width: '38%' }}>Product</th><th>Quantity</th><th>PCS</th><th>Unit cost (৳)</th><th className="text-end">Total</th><th /></tr></thead>
           <tbody>{items.map((it, i) => (
             <tr key={i}>
               <td><Form.Select required value={it.product} onChange={e => setItem(i, { product: e.target.value })}>
                 <option value="">Choose product…</option>
-                {products.filter(p => !p.isService).map(p => <option key={p._id} value={p._id}>{p.label || p.name} ({p.stock} {p.unit} now)</option>)}</Form.Select></td>
+                {products.filter(p => !p.isService).map(p => <option key={p._id} value={p._id}>{p.label || p.name} ({p.stock} {p.unit}, {p.pcs || 0} pcs now)</option>)}</Form.Select></td>
               <td><Form.Control type="number" min="0" step="any" value={it.qty} onChange={e => setItem(i, { qty: e.target.value })} /></td>
+              <td><Form.Control type="number" min="0" step="any" value={it.pcs} onChange={e => setItem(i, { pcs: e.target.value })} /></td>
               <td><Form.Control type="number" min="0" step="any" value={it.cost} onChange={e => setItem(i, { cost: e.target.value })} /></td>
               <td className="text-end">{money((+it.qty || 0) * (+it.cost || 0))}</td>
               <td><Button size="sm" variant="outline-danger" disabled={items.length < 2} onClick={() => setItems(items.filter((_, k) => k !== i))}>×</Button></td>
@@ -96,7 +97,7 @@ export function Purchases() {
             {rows.map(p => (
               <tr key={p._id}>
                 <td><b>{p.purchaseNo}</b></td><td>{fdate(p.date)}</td><td>{p.supplier?.name}</td>
-                <td className="small">{p.items.map(l => `${l.name} ${l.qty} ${l.unit}`).join(', ')}</td>
+                <td className="small">{p.items.map(l => `${l.name} ${l.qty} ${l.unit}${l.pcs ? `, ${l.pcs} pcs` : ''}`).join(', ')}</td>
                 <td className="text-end">{money(p.total)}</td><td className="text-end">{money(p.paid)}</td><td className="text-end">{money(p.due)}</td>
                 <td><Badge bg={COLOR[p.status]}>{p.status}</Badge></td>
                 <td className="text-end text-nowrap">
@@ -144,7 +145,7 @@ export function Suppliers() {
               <tr key={r.supplier._id}>
                 <td><b>{r.supplier.name}</b><div className="small text-muted">{r.supplier.phone} {r.supplier.address}</div></td>
                 <td>{r.count}</td><td className="text-end">{money(r.total)}</td><td className="text-end">{money(r.paid)}</td>
-                <td className="text-end fw-bold">{money(r.due)}</td>
+                <td className="text-end fw-bold">{money(r.due)}{r.opening > 0 && <div className="small text-muted fw-normal">incl. opening {money(r.opening)}</div>}</td>
                 <td>{r.oldest ? <>{age(r.oldest)} days {age(r.oldest) > 30 && <Badge bg="danger">Old</Badge>}</> : '–'}</td>
                 <td className="text-end text-nowrap">
                   {r.due > 0 && <Button size="sm" className="me-1" onClick={() => setPay({ title: `Payment to ${r.supplier.name}`, max: r.due, url: `/suppliers/${r.supplier._id}/pay` })}>Pay supplier</Button>}
@@ -163,6 +164,13 @@ export function Suppliers() {
           {edit && [['name', 'Company / supplier name', true], ['phone', 'Phone'], ['address', 'Address']].map(([k, l, req]) => (
             <Form.Group key={k} className="mb-3"><Form.Label>{l}</Form.Label>
               <Form.Control required={req} value={edit[k] ?? ''} onChange={e => setEdit({ ...edit, [k]: e.target.value })} /></Form.Group>))}
+          {edit && <>
+            <Form.Group className="mb-3"><Form.Label>Opening payable (৳): what you already owed this supplier before you started using this system</Form.Label>
+              <Form.Control type="number" min="0" step="any" value={edit.openingPayable ?? ''} onChange={e => setEdit({ ...edit, openingPayable: e.target.value })} />
+              <Form.Text className="text-muted">Leave empty if nothing is owed. It is not counted as a purchase in the income statement.</Form.Text></Form.Group>
+            <Form.Group className="mb-3"><Form.Label>Opening payable as of date</Form.Label>
+              <Form.Control type="date" value={String(edit.openingDate ?? '').slice(0, 10)} onChange={e => setEdit({ ...edit, openingDate: e.target.value })} />
+              <Form.Text className="text-muted">Empty means today.</Form.Text></Form.Group></>}
         </Modal.Body>
         <Modal.Footer><Button variant="light" onClick={() => setEdit(null)}>Cancel</Button><Button type="submit">Save supplier</Button></Modal.Footer>
       </Form></Modal>

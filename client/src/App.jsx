@@ -17,6 +17,7 @@ import { api } from "./api";
 import { Sales, Dues } from "./Sales.jsx";
 import { Purchases, Suppliers, Stock } from "./Purchases.jsx";
 import { Employees, Salary, Expenses } from "./Hr.jsx";
+import { Attendance } from "./Attendance.jsx";
 import { Orders } from "./Orders.jsx";
 import {
   Routes,
@@ -249,11 +250,18 @@ function CrudPage({ title, path, noun, fields, columns, empty }) {
                         required={f.required}
                         min={f.type === "number" ? 0 : undefined}
                         step="any"
-                        value={edit[f.key] ?? ""}
+                        value={
+                          f.type === "date"
+                            ? String(edit[f.key] ?? "").slice(0, 10)
+                            : (edit[f.key] ?? "")
+                        }
                         onChange={(e) =>
                           setEdit({ ...edit, [f.key]: e.target.value })
                         }
                       />
+                      {f.help && (
+                        <Form.Text className="text-muted">{f.help}</Form.Text>
+                      )}
                     </Form.Group>
                   ),
                 )}
@@ -281,12 +289,31 @@ const Clients = () => (
       { key: "phone", label: "Mobile number", required: true },
       { key: "address", label: "Address" },
       { key: "note", label: "Note" },
+      {
+        key: "openingDue",
+        label: "Opening due (৳): what this client already owed before you started using this system",
+        type: "number",
+        help: "Leave empty if nothing is owed. It is not counted as a sale in the income statement.",
+      },
+      {
+        key: "openingDate",
+        label: "Opening due as of date",
+        type: "date",
+        help: "Empty means today.",
+      },
     ]}
     columns={[
       { label: "Client ID", render: (r) => <strong>{r.clientId}</strong> },
       { label: "Name", render: (r) => r.name },
       { label: "Mobile", render: (r) => r.phone },
       { label: "Address", render: (r) => r.address },
+      {
+        label: "Opening due",
+        render: (r) =>
+          r.openingDue > 0
+            ? `৳${r.openingLeft ?? r.openingDue}${r.openingLeft < r.openingDue ? ` of ৳${r.openingDue}` : ""}`
+            : "",
+      },
     ]}
   />
 );
@@ -303,6 +330,10 @@ const Products = () => (
       { key: "thickness", label: "Thickness (MM)" },
       { key: "color", label: "Color" },
       { key: "size", label: "Size" },
+      { key: "grade", label: "Grade (A, B, C… optional)" },
+      { key: "lth", label: "LTH (length)", type: "number" },
+      { key: "wth", label: "WTH (width)", type: "number" },
+      { key: "pcs", label: "PCS in stock (separate count, not used in calculations)", type: "number" },
       { key: "unit", label: "Unit (sq ft, piece…)" },
       { key: "price", label: "Default price (৳)", type: "number" },
       {
@@ -342,6 +373,10 @@ const Products = () => (
       { label: "MM", render: (r) => r.thickness },
       { label: "Color", render: (r) => r.color },
       { label: "Size", render: (r) => r.size },
+      { label: "Grade", render: (r) => r.grade },
+      { label: "LTH", render: (r) => r.lth },
+      { label: "WTH", render: (r) => r.wth },
+      { label: "PCS", render: (r) => r.pcs ?? 0 },
       { label: "Unit", render: (r) => r.unit },
       { label: "Price", render: (r) => `৳${r.price}` },
       {
@@ -399,6 +434,7 @@ const MENU = [
     icon: "👥",
     items: [
       ["Employees", "/employees"],
+      ["Attendance", "/attendance"],
       ["Salary", "/salary"],
     ],
   },
@@ -554,6 +590,7 @@ export default function App() {
             {page("/suppliers", <Suppliers />)}
             {page("/stock", <Stock />)}
             {page("/employees", <Employees />)}
+            {page("/attendance", <Attendance />)}
             {page("/salary", <Salary />)}
             {page("/expenses", <Expenses />)}
             {page("/clients", <Clients />)}

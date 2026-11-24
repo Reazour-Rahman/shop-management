@@ -11,14 +11,29 @@ const sum = (a, k) => r2(a.reduce((s, x) => s + x[k], 0));
 
 // ---- Employees ----
 const clean = b => {
-  const o = pick(b, ['name', 'father', 'mother', 'address', 'phones', 'salary', 'nid', 'joinDate', 'active']);
+  const o = pick(b, ['name', 'father', 'mother', 'address', 'phones', 'salary', 'nid', 'joinDate', 'active', 'deviceId']);
+  if (typeof o.deviceId === 'string') o.deviceId = o.deviceId.trim().replace(/^0+(?=\d)/, '');
   if (typeof o.phones === 'string') o.phones = o.phones.split(',').map(x => x.trim()).filter(Boolean);
   if (!o.joinDate) delete o.joinDate;
   return o;
 };
-router.post('/employees', wrap(async (req, res) => res.json(await Employee.create({ ...clean(req.body), empId: await nextId('employee', 'E-') }))));
-router.put('/employees/:id', wrap(async (req, res) =>
-  res.json(await Employee.findByIdAndUpdate(req.params.id, clean(req.body), { new: true, runValidators: true }))));
+// Two people must never share one machine ID, or their punches would be mixed up
+const checkDevice = async (o, selfId) => {
+  if (!o.deviceId) return;
+  if (!/^\d{1,32}$/.test(o.deviceId)) throw new Error('Machine ID must be a number, the same number you enrolled on the attendance machine');
+  const all = await Employee.find(selfId ? { _id: { $ne: selfId } } : {});
+  const norm = s => String(s || '').replace(/^0+/, '');
+  const clash = all.find(e => norm(e.deviceId || String(e.empId || '').replace(/\D/g, '')) === norm(o.deviceId));
+  if (clash) throw new Error(`Machine ID ${o.deviceId} is already used by ${clash.name} (${clash.empId})`);
+};
+router.post('/employees', wrap(async (req, res) => {
+  const o = clean(req.body); await checkDevice(o);
+  res.json(await Employee.create({ ...o, empId: await nextId('employee', 'E-') }));
+}));
+router.put('/employees/:id', wrap(async (req, res) => {
+  const o = clean(req.body); await checkDevice(o, req.params.id);
+  res.json(await Employee.findByIdAndUpdate(req.params.id, o, { new: true, runValidators: true }));
+}));
 router.delete('/employees/:id', wrap(async (req, res) => {
   if (await SalaryRecord.exists({ employee: req.params.id })) throw new Error('This employee has salary records. Mark the employee Inactive instead of deleting.');
   await Employee.findByIdAndDelete(req.params.id); res.json({ ok: true });

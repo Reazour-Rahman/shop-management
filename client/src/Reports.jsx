@@ -79,12 +79,13 @@ export function IncomeStatement() {
         <h5>Income statement</h5><div className="text-muted small mb-2">{r.from || 'Start'} to {r.to || 'today'}</div>
         <Table size="sm" className="mb-0"><tbody>
           <L label="Net sales" value={s.revenue} bold />
+          {s.waived > 0 && <L label="Less: Dues waived (Moukuf)" value={s.waived} bold tone="text-danger" />}
           <L label="Less: Cost of goods sold" value={s.cogs} bold />
           <L label="Beginning inventory" value={s.beginInv} indent />
           <L label="+ Purchases" value={s.purchases} indent />
           {s.opening > 0 && <L label="+ Opening stock added" value={s.opening} indent />}
           <L label="− Ending inventory" value={s.endInv} indent />
-          <L label={`Gross profit${s.revenue ? ` (${((s.gross / s.revenue) * 100).toFixed(1)}%)` : ''}`} value={s.gross} bold tone={s.gross < 0 ? 'text-danger' : ''} />
+          <L label={`Gross profit${(s.revenue - (s.waived || 0)) > 0 ? ` (${((s.gross / (s.revenue - (s.waived || 0))) * 100).toFixed(1)}%)` : ''}`} value={s.gross} bold tone={s.gross < 0 ? 'text-danger' : ''} />
           <L label="Less: Operating expenses" value={s.opex} bold />
           <L label="Salary (months in this period)" value={s.salary} indent />
           <L label="Other expenses" value={s.other} indent />

@@ -2,6 +2,7 @@ const router = require('express').Router();
 const mongoose = require('mongoose');
 const { Client } = require('./models');
 const { Sale } = require('./saleModels');
+const { clientOpening } = require('./opening');
 
 const wrap = fn => (req, res) => fn(req, res).catch(e => res.status(400).json({ error: e.message }));
 
@@ -60,6 +61,7 @@ router.post('/dues/notify', wrap(async (req, res) => {
     ]),
   ]);
   const dueOf = Object.fromEntries(dues.map(d => [String(d._id), Math.round(d.due * 100) / 100]));
+  for (const [id, o] of await clientOpening(clientIds)) dueOf[id] = Math.round(((dueOf[id] || 0) + o.left) * 100) / 100; // plus the opening due still unpaid
   const rows = clients.map(c => ({ c, due: dueOf[String(c._id)] || 0, phone: normalize(c.phone), row: { client: c.name, phone: c.phone } }));
   const bad = r => (!r.due ? 'This client has no due' : !r.phone ? 'Invalid mobile number' : null);
 
