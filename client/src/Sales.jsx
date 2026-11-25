@@ -23,8 +23,8 @@ import {
 // Edit these 3 lines: they print on every cash memo and statement
 const SHOP = {
   name: "Madina Glass and Thai Aluminium",
-  address: "Thana Road, Chaumuhoni South, Ramu, Cox’s Bazar",
-  phone: "01851-235580, 01619-563481, 01821-753879",
+  address: "Thana Road, Chaumuhoni 100 Meter South, Ramu, Cox’s Bazar",
+  phone: "01851-235580, 01316754727, 01821-753879, 01619-563481",
 };
 const LOGO =
   "https://i.postimg.cc/r0L9SS4s/Madina-Glass-Architectural-Logo.png";
