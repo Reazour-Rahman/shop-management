@@ -173,10 +173,10 @@ function CrudPage({ title, path, noun, fields, columns, empty }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {rows.map((r, i) => (
                 <tr key={r._id}>
                   {columns.map((c) => (
-                    <td key={c.label}>{c.render(r)}</td>
+                    <td key={c.label}>{c.render(r, i)}</td>
                   ))}
                   <td className="text-end text-nowrap">
                     <Button
@@ -368,6 +368,7 @@ const Products = () => (
       },
     ]}
     columns={[
+      { label: "SL", render: (r, i) => i + 1 },
       { label: "Product", render: (r) => <strong>{r.name}</strong> },
       { label: "Brand", render: (r) => r.brand },
       { label: "MM", render: (r) => r.thickness },
